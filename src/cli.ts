@@ -1,9 +1,5 @@
-import yargs from 'yargs'
-import { hideBin } from 'yargs/helpers'
-import npmMigrateAll from '.'
-import chalk from 'chalk'
-
-const argv: any = yargs(hideBin(process.argv)).argv
+import npmMigrateAll from './index.js'
+import 'zx/globals'
 
 const pkgs = argv._
 // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions

@@ -3,7 +3,9 @@
   "version": "0.0.1",
   "description": "Migrate all versions of given npm package to another registry.",
   "main": "lib/index.js",
+  "type": "module",
   "scripts": {
+    "start": "ts-node --esm src/cli.ts",
     "prepublishOnly": "npm run build",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -29,7 +31,14 @@
   },
   "homepage": "https://github.com/banyudu/npm-migrate-all#readme",
   "devDependencies": {
+    "@types/gunzip-maybe": "^1.4.0",
+    "@types/lodash": "^4.14.182",
+    "@types/multi-progress": "^2.0.3",
     "@types/node": "^18.0.3",
+    "@types/npm": "^7.19.0",
+    "@types/progress": "^2.0.5",
+    "@types/stream-to-promise": "^2.2.1",
+    "@types/tar-stream": "^2.2.2",
     "@types/yargs": "^17.0.10",
     "@typescript-eslint/eslint-plugin": "^5.0.0",
     "eslint": "^8.0.1",
@@ -44,8 +53,18 @@
     "typescript": "*"
   },
   "dependencies": {
+    "@types/p-limit": "^2.2.0",
     "axios": "^0.27.2",
-    "chalk": "4",
-    "yargs": "^17.5.1"
+    "gunzip-maybe": "^1.4.2",
+    "i": "^0.3.7",
+    "lodash": "^4.17.21",
+    "multi-progress": "^4.0.0",
+    "npm": "^8.13.2",
+    "p-limit": "^4.0.0",
+    "progress": "2",
+    "stream-to-promise": "^3.0.0",
+    "stream-to-string": "^1.2.0",
+    "tar-stream": "^2.2.0",
+    "zx": "^7.0.7"
   }
 }
