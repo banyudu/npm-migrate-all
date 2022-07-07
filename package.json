@@ -1,0 +1,51 @@
+{
+  "name": "npm-migrate-all",
+  "version": "0.0.1",
+  "description": "Migrate all versions of given npm package to another registry.",
+  "main": "lib/index.js",
+  "scripts": {
+    "prepublishOnly": "npm run build",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepare": "husky install"
+  },
+  "files": [
+    "src",
+    "lib"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/banyudu/npm-migrate-all.git"
+  },
+  "keywords": [
+    "npm",
+    "migrate",
+    "verdaccio"
+  ],
+  "author": "banyudu <banyudu@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/banyudu/npm-migrate-all/issues"
+  },
+  "homepage": "https://github.com/banyudu/npm-migrate-all#readme",
+  "devDependencies": {
+    "@types/node": "^18.0.3",
+    "@types/yargs": "^17.0.10",
+    "@typescript-eslint/eslint-plugin": "^5.0.0",
+    "eslint": "^8.0.1",
+    "eslint-config-standard-with-typescript": "^21.0.1",
+    "eslint-plugin-import": "^2.25.2",
+    "eslint-plugin-n": "^15.0.0",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^6.0.0",
+    "husky": "^8.0.1",
+    "lint-staged": "^13.0.3",
+    "prettier": "^2.7.1",
+    "typescript": "*"
+  },
+  "dependencies": {
+    "axios": "^0.27.2",
+    "chalk": "4",
+    "yargs": "^17.5.1"
+  }
+}
