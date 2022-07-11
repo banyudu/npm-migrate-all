@@ -28,8 +28,8 @@ const getProgressBarOptions = (total: number): ProgressBarOptions => ({
 })
 
 const metaLimit = pLimit(20) // set max concurrency to 10, change as your wish
-const pkgLimit = pLimit(10)
-const versionLimit = pLimit(50)
+const pkgLimit = pLimit(5)
+const versionLimit = pLimit(10)
 
 const padName = (str: string, length: number = 20): string => str.padEnd(length, ' ')
 
@@ -61,17 +61,24 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
     console.warn(chalk.bgYellowBright(`Caution: Not logging to ${to} , npm publish may fail. Consider npm login first.`))
   }
 
+  // fetch metadata
+  const metadataBar = multi.newBar(`${padName('fetching metadata')} [:bar] :percent :etas`, getProgressBarOptions(2 * pkgs.length))
+  metadataBar.tick(0)
+
   const getPackageSummary = async (pkg: string, registry: string): Promise<PackageSummary | null> => {
+    let result = null
     try {
       const metadata = await inspect(pkg, null, registry)
-      return {
+      result = {
         name: metadata.name,
         distTags: metadata['dist-tags'],
         versions: metadata.versions
       }
     } catch (error) {
-      return null
+      // do nothing
     }
+    metadataBar.tick()
+    return result
   }
 
   const fetchSourcePackages = async (): Promise<Array<PackageSummary | null>> => {
@@ -84,13 +91,8 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
     return info
   }
 
-  // fetch metadata
-  const metadataBar = multi.newBar(`${padName('fetching metadata')} [:bar] :percent :etas`, getProgressBarOptions(2))
-  metadataBar.tick(0)
   const sourcePackages = await fetchSourcePackages()
-  metadataBar.tick()
   const targetPackages = await fetchTargetPackages()
-  metadataBar.tick()
 
   const delimeter = '^'
   const targetPackageSet = new Set(
