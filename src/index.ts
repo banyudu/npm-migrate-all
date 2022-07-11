@@ -45,10 +45,6 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'npm-migrate-all-'))
   await $`cd ${tempDir}`
 
-  for (const pkg of pkgs) {
-    console.log(chalk.green(`processing ${pkg}`))
-  }
-
   const getPackageSummary = async (pkg: string, registry: string): Promise<PackageSummary | null> => {
     try {
       const metadata = await inspect(pkg, null, registry)
