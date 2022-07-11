@@ -31,7 +31,7 @@ const metaLimit = pLimit(20) // set max concurrency to 10, change as your wish
 const pkgLimit = pLimit(10)
 const versionLimit = pLimit(50)
 
-const padName = (str: string): string => str.padEnd(20, ' ')
+const padName = (str: string, length: number = 20): string => str.padEnd(length, ' ')
 
 const inspect = async (name: string, version: string | null, registry: string) => {
   const scope = name.startsWith('@') ? name.split('/')[0] : null
@@ -41,9 +41,25 @@ const inspect = async (name: string, version: string | null, registry: string) =
   return result
 }
 
-const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<void> => {
+interface MigrateResult {
+  succeeded: string[]
+  failed: string[]
+  skipped: string[]
+}
+
+const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<MigrateResult> => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'npm-migrate-all-'))
   await $`cd ${tempDir}`
+
+  const succeeded: string[] = []
+  const failed: string[] = []
+  const skipped: string[] = []
+
+  try {
+    await $`npm whoami --registry ${to}`
+  } catch (error) {
+    console.warn(chalk.bgYellowBright(`Caution: Not logging to ${to} , npm publish may fail. Consider npm login first.`))
+  }
 
   const getPackageSummary = async (pkg: string, registry: string): Promise<PackageSummary | null> => {
     try {
@@ -86,6 +102,7 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
 
   const syncOne = async (pkg: PackageSummary, version: string | null, bar: ProgressBar): Promise<void> => {
     const key = [pkg.name, version].join(delimeter)
+    const packageName = [pkg.name, version].join('@')
     if (version != null && !targetPackageSet.has(key)) {
       // process single version
 
@@ -136,15 +153,19 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
         const scope = pkg.name.startsWith('@') ? pkg.name.split('/')[0] : null
         const prefix = scope ? `${scope}:` : ''
         await $`npm publish --${prefix}registry=${to} ${destFilename}`
+        succeeded.push(packageName)
       } catch (error) {
         console.error(chalk.red(error))
+        failed.push(packageName)
       }
+    } else {
+      skipped.push(packageName)
     }
     bar.tick({ version: `v${version ?? ''}` })
   }
 
   const sync = async (pkg: PackageSummary): Promise<void> => {
-    const bar = multi.newBar(`${padName('      ' + pkg.name)} [:bar] [:version] :current/:total :etas`, getProgressBarOptions(pkg.versions.length))
+    const bar = multi.newBar(`${padName('      ' + pkg.name, 40)} [:bar] [:version] :current/:total :etas`, getProgressBarOptions(pkg.versions.length))
     bar.tick(0, { version: ' ... ' })
     const pkgDir = path.join(tempDir, pkg.name)
     await fs.rm(pkgDir, { force: true, recursive: true })
@@ -158,6 +179,11 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
   }
 
   await Promise.all(sourcePackages.filter(Boolean).map(async e => await pkgLimit(async () => await sync(e as PackageSummary))))
+  return {
+    succeeded,
+    failed,
+    skipped
+  }
 }
 
 export default npmMigrateAll

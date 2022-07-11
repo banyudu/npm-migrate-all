@@ -1,10 +1,11 @@
 {
   "name": "npm-migrate-all",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Migrate all versions of given npm package to another registry.",
   "main": "lib/index.js",
   "type": "module",
   "types": "lib/index.d.ts",
+  "bin": "lib/cli.js",
   "scripts": {
     "start": "ts-node --esm src/cli.ts",
     "prepublishOnly": "npm run build",
