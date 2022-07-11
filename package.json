@@ -1,6 +1,6 @@
 {
   "name": "npm-migrate-all",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Migrate all versions of given npm package to another registry.",
   "main": "lib/index.js",
   "type": "module",

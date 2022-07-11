@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import npmMigrateAll from './index.js'
 import 'zx/globals'
 
