@@ -119,7 +119,7 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
 
         // if publishConfig.registry exists in package.json, then package.json must be edited to use target registry
         // const needUpdate = metadata.publishConfig?.registry && metadata.publishConfig.registry !== to
-        const needUpdate = metadata.publishConfig?.registry !== to
+        const needUpdate = metadata.publishConfig?.registry && metadata.publishConfig?.registry !== to
         if (needUpdate) {
           const pack = tar.pack()
           const extract = tar.extract()
@@ -176,7 +176,7 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
     const versionsExceptLatest = pkg.versions.filter(e => e !== pkg.distTags.latest)
     await Promise.all(versionsExceptLatest.map(async version => await versionLimit(async () => await syncOne(pkg, version, bar))))
     await versionLimit(async () => await syncOne(pkg, pkg.distTags.latest ?? null, bar))
-    bar.tick(pkg.versions.length, { version: '100%' })
+    bar.tick(0, { version: '100%' })
     publishBar.tick()
   }
 

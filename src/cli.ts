@@ -23,6 +23,7 @@ if (!argv.from || !argv.to || !pkgs.length) {
 const run = async () => {
   const padName = (name: string) => name.padEnd(80, ' ')
   const { succeeded, failed, skipped } = await npmMigrateAll(argv.from, argv.to, pkgs)
+  console.log('\n')
   for (const item of skipped) {
     console.log(chalk.yellow(`${padName(item)}\tskiped`))
   }
