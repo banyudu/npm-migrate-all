@@ -82,7 +82,7 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
 
   // fetch metadata
   const metadataBar = multi.newBar(
-    `${padName('fetching metadata')} [:bar] :percent :etas`,
+    `${padName('fetching metadata')} [:bar] :current/:total :etas`,
     getProgressBarOptions(2 * pkgs.length)
   )
   metadataBar.tick(0)
@@ -99,6 +99,7 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
       // else return all versions
       const lastIndex = pkg.lastIndexOf('@')
       const specifiedVersion = lastIndex > 0 ? pkg.substring(lastIndex + 1) : null
+
       result = {
         name: metadata.name,
         distTags: metadata['dist-tags'],
@@ -138,7 +139,7 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
   )
 
   const publishBar = multi.newBar(
-    `${padName('publishing...')} [:bar] :percent :etas`,
+    `${padName('publishing...')} [:bar] :current/:total :etas`,
     getProgressBarOptions(sourcePackages.length)
   )
   publishBar.tick(0)
@@ -158,7 +159,12 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
       try {
         const metadata = await inspect(pkg.name, version, from)
         const tarballUrl = metadata.dist.tarball
-        const tarballData = (await axios.get(tarballUrl, { responseType: 'arraybuffer' })).data
+        const tarballData = (await axios.get(
+          tarballUrl,
+          {
+            responseType: 'arraybuffer'
+          }
+        )).data
         const basename = path.basename(tarballUrl)
         const pkgDir = path.join(tempDir, pkg.name)
         const destFilename = path.join(pkgDir, basename)
@@ -167,9 +173,11 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
         // const needUpdate = metadata.publishConfig?.registry && metadata.publishConfig.registry !== to
         const needUpdate = metadata.publishConfig?.registry &&
           metadata.publishConfig?.registry !== to
+
         if (needUpdate) {
           const pack = tar.pack()
           const extract = tar.extract()
+
           // eslint-disable-next-line @typescript-eslint/no-misused-promises
           extract.on('entry', async function (header, stream, callback) {
             // let's prefix all names with 'tmp'
@@ -177,8 +185,10 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
               // remove publishConfig.registry field in package.json
               const pkgJsonStr = await toString(stream)
               const pkgJsonObj = JSON.parse(pkgJsonStr)
+
               pkgJsonObj.publishConfig = pkgJsonObj.publishConfig || {}
               pkgJsonObj.publishConfig.registry = to
+
               const newPkgJsonStr = JSON.stringify(pkgJsonObj, null, 2)
               pack.entry({ name: 'package/package.json' }, newPkgJsonStr, callback)
             } else {
@@ -218,7 +228,9 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
       `${padName('      ' + pkg.name, 40)} [:bar] [:version] :current/:total :etas`,
       getProgressBarOptions(pkg.versions.length)
     )
+
     bar.tick(0, { version: ' ... ' })
+
     const pkgDir = path.join(tempDir, pkg.name)
     await fs.rm(pkgDir, { force: true, recursive: true })
     await fs.mkdirp(pkgDir)
@@ -234,6 +246,7 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
     }, {})
 
     let shouldCleanTmpDistTag = false
+
     await Promise.all(pkg.versions.map(async version =>
       await concurrenyLimit(async () => {
         const distTag = version2DistTag[version] ?? tmpDistTag
@@ -243,9 +256,10 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
         await syncOne(pkg, version, version2DistTag[version] ?? tmpDistTag, bar)
       })
     ))
+
     bar.tick(0, { version: '100%' })
 
-    // 清理临时 distTag
+    // clean temporary distTag
     const registryParam = getRegistryParam(pkg.name, to)
     try {
       if (shouldCleanTmpDistTag) {
@@ -255,7 +269,7 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
       // do nothing
     }
 
-    // 因为 latest dist-tag 比较特殊，这里重新设置一下
+    // treat latest dist-tag specially
     try {
       if (pkg.distTags.latest) {
         await $`npm dist-tag add ${registryParam} ${pkg.name}@${pkg.distTags.latest} latest`
