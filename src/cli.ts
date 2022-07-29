@@ -34,6 +34,7 @@ const run = async () => {
   for (const item of failed) {
     console.log(chalk.red(`${padName(item)}\tfailed`))
   }
+  console.log(`summary: skiped(${chalk.yellow(skipped.length)}) succeeded(${chalk.green(succeeded.length)}) failed(${chalk.red(failed.length)})`)
 }
 
 run().catch(console.error)
