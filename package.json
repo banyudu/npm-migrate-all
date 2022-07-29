@@ -1,6 +1,6 @@
 {
   "name": "npm-migrate-all",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "Migrate all versions of given npm package to another registry.",
   "main": "lib/index.js",
   "type": "module",
@@ -10,6 +10,8 @@
     "start": "ts-node --esm src/cli.ts",
     "prepublishOnly": "npm run build",
     "build": "tsc",
+    "lint": "eslint . --ext=.jsx,.js,.tsx,.ts",
+    "lint:fix": "eslint . --fix --ext=.jsx,.js,.tsx,.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "prepare": "husky install"
   },

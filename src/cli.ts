@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable max-len */
 
 import npmMigrateAll from './index.js'
 import 'zx/globals'
@@ -8,10 +9,10 @@ const pkgs = argv._
 const usage = () => {
   console.log(`
   Usage:
-    npx npm-migrate-all --from=<source registry url> --to=<target registry url> pkg1 pkg2 pkg3 [...]
+    npx npm-migrate-all --from=<source registry url> --to=<target registry url> [...pkgs]
 
   Example:
-    npx npm-migrate-all --from=https://registry.npmjs.org/ --to=http://localhost:4873/ @my/pkg1 @my/pkg2
+    npx npm-migrate-all --from=https://registry.npmjs.org/ --to=http://localhost:4873/ pkg1 @scope/pkg2 pkg3@1.0.0
   `)
 }
 // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions

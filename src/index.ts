@@ -27,17 +27,26 @@ const getProgressBarOptions = (total: number): ProgressBarOptions => ({
   total
 })
 
-const metaLimit = pLimit(20) // set max concurrency to 10, change as your wish
-const pkgLimit = pLimit(5)
-const versionLimit = pLimit(10)
+const { NPM_MIGRATE_MAX_CONCURRENCY } = process.env as any
+
+const concurrenyLimit = pLimit(
+  NPM_MIGRATE_MAX_CONCURRENCY ? Number(NPM_MIGRATE_MAX_CONCURRENCY) || 1 : 20
+)
+
+const getRegistryParam = (pkgName: string, registry: string) => {
+  const scope = pkgName.startsWith('@') ? pkgName.split('/')[0] : null
+  const prefix = scope ? `${scope}:` : ''
+  return `--${prefix}registry=${registry}`
+}
 
 const padName = (str: string, length: number = 20): string => str.padEnd(length, ' ')
 
 const inspect = async (name: string, version: string | null, registry: string) => {
-  const scope = name.startsWith('@') ? name.split('/')[0] : null
-  const prefix = scope ? `${scope}:` : ''
   const target = version ? [name, version].join('@') : name
-  const result = JSON.parse((await $`npm show ${target} --${prefix}registry=${registry} --json`).stdout)
+  const registryParam = getRegistryParam(name, registry)
+  const result = JSON.parse(
+    (await $`npm show ${target} ${registryParam} --json`).stdout
+  )
   return result
 }
 
@@ -47,7 +56,15 @@ interface MigrateResult {
   skipped: string[]
 }
 
+/**
+ * batch migrate npm packages
+ * @param from source registry url. Example: https://registry.npmjs.org/
+ * @param to target registry url
+ * @param pkgs packages to migrate. with or without version. Example: ['react', 'react-dom@16.8.0']
+ * @returns MigrateResult
+ */
 const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<MigrateResult> => {
+  pkgs = pkgs.map(e => e?.trim?.()).filter(Boolean)
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'npm-migrate-all-'))
   await $`cd ${tempDir}`
 
@@ -58,21 +75,34 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
   try {
     await $`npm whoami --registry ${to}`
   } catch (error) {
-    console.warn(chalk.bgYellowBright(`Caution: Not logging to ${to} , npm publish may fail. Consider npm login first.`))
+    console.warn(chalk.bgYellowBright(
+      `Caution: Not logging to ${to} , npm publish may fail. Consider npm login first.`
+    ))
   }
 
   // fetch metadata
-  const metadataBar = multi.newBar(`${padName('fetching metadata')} [:bar] :percent :etas`, getProgressBarOptions(2 * pkgs.length))
+  const metadataBar = multi.newBar(
+    `${padName('fetching metadata')} [:bar] :percent :etas`,
+    getProgressBarOptions(2 * pkgs.length)
+  )
   metadataBar.tick(0)
 
-  const getPackageSummary = async (pkg: string, registry: string): Promise<PackageSummary | null> => {
+  const getPackageSummary = async (
+    pkg: string,
+    registry: string
+  ): Promise<PackageSummary | null> => {
     let result = null
     try {
       const metadata = await inspect(pkg, null, registry)
+
+      // if pkg is `name@version` format, return only given version.
+      // else return all versions
+      const lastIndex = pkg.lastIndexOf('@')
+      const specifiedVersion = lastIndex > 0 ? pkg.substring(lastIndex + 1) : null
       result = {
         name: metadata.name,
         distTags: metadata['dist-tags'],
-        versions: metadata.versions
+        versions: specifiedVersion ? [specifiedVersion] : metadata.versions
       }
     } catch (error) {
       // do nothing
@@ -82,12 +112,16 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
   }
 
   const fetchSourcePackages = async (): Promise<Array<PackageSummary | null>> => {
-    const info = await Promise.all(pkgs.map(async pkg => await metaLimit(async () => await getPackageSummary(pkg, from))))
+    const info = await Promise.all(pkgs.map(async pkg =>
+      await concurrenyLimit(async () => await getPackageSummary(pkg, from))
+    ))
     return info
   }
 
   const fetchTargetPackages = async (): Promise<Array<PackageSummary | null>> => {
-    const info = await Promise.all(pkgs.map(async pkg => await metaLimit(async () => await getPackageSummary(pkg, to))))
+    const info = await Promise.all(pkgs.map(async pkg =>
+      await concurrenyLimit(async () => await getPackageSummary(pkg, to))
+    ))
     return info
   }
 
@@ -96,13 +130,25 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
 
   const delimeter = '^'
   const targetPackageSet = new Set(
-    targetPackages.filter(Boolean).flatMap(pkg => pkg?.versions.map(e => [pkg.name, e].join(delimeter)))
+    targetPackages
+      .filter(Boolean)
+      .flatMap(pkg =>
+        pkg?.versions.map(e => [pkg.name, e].join(delimeter))
+      )
   )
 
-  const publishBar = multi.newBar(`${padName('publishing...')} [:bar] :percent :etas`, getProgressBarOptions(sourcePackages.length))
+  const publishBar = multi.newBar(
+    `${padName('publishing...')} [:bar] :percent :etas`,
+    getProgressBarOptions(sourcePackages.length)
+  )
   publishBar.tick(0)
 
-  const syncOne = async (pkg: PackageSummary, version: string | null, bar: ProgressBar): Promise<void> => {
+  const syncOne = async (
+    pkg: PackageSummary,
+    version: string,
+    distTag: string,
+    bar: ProgressBar
+  ): Promise<void> => {
     const key = [pkg.name, version].join(delimeter)
     const packageName = [pkg.name, version].join('@')
     if (version != null && !targetPackageSet.has(key)) {
@@ -119,11 +165,13 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
 
         // if publishConfig.registry exists in package.json, then package.json must be edited to use target registry
         // const needUpdate = metadata.publishConfig?.registry && metadata.publishConfig.registry !== to
-        const needUpdate = metadata.publishConfig?.registry && metadata.publishConfig?.registry !== to
+        const needUpdate = metadata.publishConfig?.registry &&
+          metadata.publishConfig?.registry !== to
         if (needUpdate) {
           const pack = tar.pack()
           const extract = tar.extract()
-          extract.on('entry', async function(header, stream, callback) {
+          // eslint-disable-next-line @typescript-eslint/no-misused-promises
+          extract.on('entry', async function (header, stream, callback) {
             // let's prefix all names with 'tmp'
             if (header.name === 'package/package.json') {
               // remove publishConfig.registry field in package.json
@@ -139,7 +187,7 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
             }
           })
 
-          extract.on('finish', function() {
+          extract.on('finish', function () {
             // all entries done - lets finalize it
             pack.finalize()
           })
@@ -152,9 +200,8 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
           await fs.writeFile(destFilename, tarballData)
         }
 
-        const scope = pkg.name.startsWith('@') ? pkg.name.split('/')[0] : null
-        const prefix = scope ? `${scope}:` : ''
-        await $`npm publish --${prefix}registry=${to} ${destFilename}`
+        const registryParam = getRegistryParam(pkg.name, to)
+        await $`npm publish ${registryParam} --tag ${distTag} ${destFilename}`
         succeeded.push(packageName)
       } catch (error) {
         console.error(chalk.red(error))
@@ -167,20 +214,61 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
   }
 
   const sync = async (pkg: PackageSummary): Promise<void> => {
-    const bar = multi.newBar(`${padName('      ' + pkg.name, 40)} [:bar] [:version] :current/:total :etas`, getProgressBarOptions(pkg.versions.length))
+    const bar = multi.newBar(
+      `${padName('      ' + pkg.name, 40)} [:bar] [:version] :current/:total :etas`,
+      getProgressBarOptions(pkg.versions.length)
+    )
     bar.tick(0, { version: ' ... ' })
     const pkgDir = path.join(tempDir, pkg.name)
     await fs.rm(pkgDir, { force: true, recursive: true })
     await fs.mkdirp(pkgDir)
 
-    const versionsExceptLatest = pkg.versions.filter(e => e !== pkg.distTags.latest)
-    await Promise.all(versionsExceptLatest.map(async version => await versionLimit(async () => await syncOne(pkg, version, bar))))
-    await versionLimit(async () => await syncOne(pkg, pkg.distTags.latest ?? null, bar))
+    let tmpDistTag = 'npm-release-all-temp'
+    while (pkg.distTags[tmpDistTag]) {
+      tmpDistTag = 'npm-release-all-temp-' + Math.random().toString().substring(2, 6)
+    }
+    const version2DistTag = Object.keys(pkg.distTags).reduce((res: Record<string, string>, tag) => {
+      const version = pkg.distTags[tag] as string
+      res[version] = tag
+      return res
+    }, {})
+
+    let shouldCleanTmpDistTag = false
+    await Promise.all(pkg.versions.map(async version =>
+      await concurrenyLimit(async () => {
+        const distTag = version2DistTag[version] ?? tmpDistTag
+        if (distTag === tmpDistTag) {
+          shouldCleanTmpDistTag = true
+        }
+        await syncOne(pkg, version, version2DistTag[version] ?? tmpDistTag, bar)
+      })
+    ))
     bar.tick(0, { version: '100%' })
+
+    // 清理临时 distTag
+    const registryParam = getRegistryParam(pkg.name, to)
+    try {
+      if (shouldCleanTmpDistTag) {
+        await $`npm dist-tag rm ${registryParam} ${pkg.name} ${tmpDistTag}`
+      }
+    } catch (error) {
+      // do nothing
+    }
+
+    // 因为 latest dist-tag 比较特殊，这里重新设置一下
+    try {
+      if (pkg.distTags.latest) {
+        await $`npm dist-tag add ${registryParam} ${pkg.name}@${pkg.distTags.latest} latest`
+      }
+    } catch (error) {
+      // do nothing
+    }
     publishBar.tick()
   }
 
-  await Promise.all(sourcePackages.filter(Boolean).map(async e => await pkgLimit(async () => await sync(e as PackageSummary))))
+  await Promise.all(sourcePackages.filter(Boolean).map(async e =>
+    await concurrenyLimit(async () => await sync(e as PackageSummary))
+  ))
   return {
     succeeded,
     failed,
