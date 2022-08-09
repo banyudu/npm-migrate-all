@@ -32,10 +32,13 @@ npmMigrateAll(from, to, pkgs).then(({
 npx npm-migrate-all --from=https://registry.npmjs.org/ --to=http://localhost:4873/ pkg1 @my/pkg2 pkg3@0.1.0
 ```
 
-If you'd like to adjust concurreny limit, set environment variable `NPM_MIGRATE_MAX_CONCURRENCY` to the value as you wish.
+If you'd like to adjust concurreny limit, set environment variable `META_RATE_LIMIT`, `PACKAGE_RATE_LIMIT`, `VERSION_RATE_LIMIT` to the value as you wish.
 
 ```bash
-NPM_MIGRATE_MAX_CONCURRENCY=100 npx npm-migrate-all --from=https://registry.npmjs.org/ --to=http://localhost:4873/ pkg1 @my/pkg2 pkg3@0.1.0
+# META_RATE_LIMIT default value 10
+# PACKAGE_RATE_LIMIT default value 5
+# VERSION_RATE_LIMIT default value 10
+META_RATE_LIMIT=10 PACKAGE_RATE_LIMIT=5 VERSION_RATE_LIMIT=10 npx npm-migrate-all --from=https://registry.npmjs.org/ --to=http://localhost:4873/ pkg1 @my/pkg2 pkg3@0.1.0
 ```
 
 ## Explain

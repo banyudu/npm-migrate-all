@@ -9,6 +9,7 @@
   "scripts": {
     "start": "ts-node --esm src/cli.ts",
     "prepublishOnly": "npm run build",
+    "postversion": "git push --follow-tags && npm publish",
     "build": "tsc",
     "lint": "eslint . --ext=.jsx,.js,.tsx,.ts",
     "lint:fix": "eslint . --fix --ext=.jsx,.js,.tsx,.ts",
