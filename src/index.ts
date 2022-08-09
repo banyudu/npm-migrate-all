@@ -27,11 +27,9 @@ const getProgressBarOptions = (total: number): ProgressBarOptions => ({
   total
 })
 
-const { NPM_MIGRATE_MAX_CONCURRENCY } = process.env as any
-
-const concurrenyLimit = pLimit(
-  NPM_MIGRATE_MAX_CONCURRENCY ? Number(NPM_MIGRATE_MAX_CONCURRENCY) || 1 : 20
-)
+const metaLimit = pLimit(Number(process.env.META_RATE_LIMIT) || 10)
+const pkgLimit = pLimit(Number(process.env.PACKAGE_RATE_LIMIT) || 5)
+const versionLimit = pLimit(Number(process.env.VERSION_RATE_LIMIT) || 10)
 
 const getRegistryParam = (pkgName: string, registry: string) => {
   const scope = pkgName.startsWith('@') ? pkgName.split('/')[0] : null
@@ -114,14 +112,14 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
 
   const fetchSourcePackages = async (): Promise<Array<PackageSummary | null>> => {
     const info = await Promise.all(pkgs.map(async pkg =>
-      await concurrenyLimit(async () => await getPackageSummary(pkg, from))
+      await metaLimit(async () => await getPackageSummary(pkg, from))
     ))
     return info
   }
 
   const fetchTargetPackages = async (): Promise<Array<PackageSummary | null>> => {
     const info = await Promise.all(pkgs.map(async pkg =>
-      await concurrenyLimit(async () => await getPackageSummary(pkg, to))
+      await metaLimit(async () => await getPackageSummary(pkg, to))
     ))
     return info
   }
@@ -248,7 +246,7 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
     let shouldCleanTmpDistTag = false
 
     await Promise.all(pkg.versions.map(async version =>
-      await concurrenyLimit(async () => {
+      await versionLimit(async () => {
         const distTag = version2DistTag[version] ?? tmpDistTag
         if (distTag === tmpDistTag) {
           shouldCleanTmpDistTag = true
@@ -281,7 +279,7 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
   }
 
   await Promise.all(sourcePackages.filter(Boolean).map(async e =>
-    await concurrenyLimit(async () => await sync(e as PackageSummary))
+    await pkgLimit(async () => await sync(e as PackageSummary))
   ))
   return {
     succeeded,
