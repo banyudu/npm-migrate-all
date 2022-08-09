@@ -8,6 +8,7 @@ import { Readable } from 'stream'
 import gunzip from 'gunzip-maybe'
 import toString from 'stream-to-string'
 import streamToPromise from 'stream-to-promise'
+import zlib from 'zlib'
 // import * as _ from 'lodash'
 
 interface PackageSummary {
@@ -158,13 +159,8 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
         const pkgJsonObj = JSON.parse(pkgJsonStr)
 
         // artifactory cannot handle publishConfig.registry, so delete it instead of update
-        // pkgJsonObj.publishConfig = pkgJsonObj.publishConfig || {}
-        // pkgJsonObj.publishConfig.registry = to
-
-        delete pkgJsonObj.publishConfig.registry
-        if (Object.keys(pkgJsonObj.publishConfig).length === 0) {
-          delete pkgJsonObj.publishConfig
-        }
+        pkgJsonObj.publishConfig = pkgJsonObj.publishConfig || {}
+        pkgJsonObj.publishConfig.registry = to
 
         const newPkgJsonStr = JSON.stringify(pkgJsonObj, null, 2)
         pack.entry({ name: 'package/package.json' }, newPkgJsonStr, callback)
@@ -180,8 +176,11 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
     })
 
     Readable.from(tarballData).pipe(gunzip()).pipe(extract)
+
     const wStream = fs.createWriteStream(destFilename)
-    pack.pipe(wStream)
+
+    pack.pipe(zlib.createGzip()).pipe(wStream)
+
     await streamToPromise(wStream)
   }
 
@@ -222,7 +221,6 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
         }
 
         const registryParam = getRegistryParam(pkg.name, to)
-        console.log('destFilename: ', destFilename)
         await $`npm publish ${registryParam} --tag ${distTag} ${destFilename}`
         succeeded.push(packageName)
       } catch (error) {
