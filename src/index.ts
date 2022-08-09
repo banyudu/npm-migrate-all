@@ -31,6 +31,9 @@ const metaLimit = pLimit(Number(process.env.META_RATE_LIMIT) || 10)
 const pkgLimit = pLimit(Number(process.env.PACKAGE_RATE_LIMIT) || 5)
 const versionLimit = pLimit(Number(process.env.VERSION_RATE_LIMIT) || 10)
 
+// operations that requires `cd` change current directory
+// const cdLimit = pLimit(1)
+
 const getRegistryParam = (pkgName: string, registry: string) => {
   const scope = pkgName.startsWith('@') ? pkgName.split('/')[0] : null
   const prefix = scope ? `${scope}:` : ''
@@ -142,6 +145,46 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
   )
   publishBar.tick(0)
 
+  const updateAndSync = async (tarballData: any, destFilename: string) => {
+    const pack = tar.pack()
+    const extract = tar.extract()
+
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    extract.on('entry', async function (header, stream, callback) {
+      // let's prefix all names with 'tmp'
+      if (header.name === 'package/package.json') {
+        // remove publishConfig.registry field in package.json
+        const pkgJsonStr = await toString(stream)
+        const pkgJsonObj = JSON.parse(pkgJsonStr)
+
+        // artifactory cannot handle publishConfig.registry, so delete it instead of update
+        // pkgJsonObj.publishConfig = pkgJsonObj.publishConfig || {}
+        // pkgJsonObj.publishConfig.registry = to
+
+        delete pkgJsonObj.publishConfig.registry
+        if (Object.keys(pkgJsonObj.publishConfig).length === 0) {
+          delete pkgJsonObj.publishConfig
+        }
+
+        const newPkgJsonStr = JSON.stringify(pkgJsonObj, null, 2)
+        pack.entry({ name: 'package/package.json' }, newPkgJsonStr, callback)
+      } else {
+        // write the new entry to the pack stream
+        stream.pipe(pack.entry(header, callback))
+      }
+    })
+
+    extract.on('finish', function () {
+      // all entries done - lets finalize it
+      pack.finalize()
+    })
+
+    Readable.from(tarballData).pipe(gunzip()).pipe(extract)
+    const wStream = fs.createWriteStream(destFilename)
+    pack.pipe(wStream)
+    await streamToPromise(wStream)
+  }
+
   const syncOne = async (
     pkg: PackageSummary,
     version: string,
@@ -173,48 +216,13 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
           metadata.publishConfig?.registry !== to
 
         if (needUpdate) {
-          const pack = tar.pack()
-          const extract = tar.extract()
-
-          // eslint-disable-next-line @typescript-eslint/no-misused-promises
-          extract.on('entry', async function (header, stream, callback) {
-            // let's prefix all names with 'tmp'
-            if (header.name === 'package/package.json') {
-              // remove publishConfig.registry field in package.json
-              const pkgJsonStr = await toString(stream)
-              const pkgJsonObj = JSON.parse(pkgJsonStr)
-
-              // artifactory cannot handle publishConfig.registry, so delete it instead of update
-              // pkgJsonObj.publishConfig = pkgJsonObj.publishConfig || {}
-              // pkgJsonObj.publishConfig.registry = to
-
-              delete pkgJsonObj.publishConfig.registry
-              if (Object.keys(pkgJsonObj.publishConfig).length === 0) {
-                delete pkgJsonObj.publishConfig
-              }
-
-              const newPkgJsonStr = JSON.stringify(pkgJsonObj, null, 2)
-              pack.entry({ name: 'package/package.json' }, newPkgJsonStr, callback)
-            } else {
-              // write the new entry to the pack stream
-              stream.pipe(pack.entry(header, callback))
-            }
-          })
-
-          extract.on('finish', function () {
-            // all entries done - lets finalize it
-            pack.finalize()
-          })
-
-          Readable.from(tarballData).pipe(gunzip()).pipe(extract)
-          const wStream = fs.createWriteStream(destFilename)
-          pack.pipe(wStream)
-          await streamToPromise(wStream)
+          await updateAndSync(tarballData, destFilename)
         } else {
           await fs.writeFile(destFilename, tarballData)
         }
 
         const registryParam = getRegistryParam(pkg.name, to)
+        console.log('destFilename: ', destFilename)
         await $`npm publish ${registryParam} --tag ${distTag} ${destFilename}`
         succeeded.push(packageName)
       } catch (error) {
