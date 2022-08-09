@@ -167,7 +167,7 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
         const pkgDir = path.join(tempDir, pkg.name)
         const destFilename = path.join(pkgDir, basename)
 
-        // if publishConfig.registry exists in package.json, then package.json must be edited to use target registry
+        // if publishConfig.registry exists in package.json, then it must be euqal to the target registry
         // const needUpdate = metadata.publishConfig?.registry && metadata.publishConfig.registry !== to
         const needUpdate = metadata.publishConfig?.registry &&
           metadata.publishConfig?.registry !== to
@@ -184,8 +184,14 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
               const pkgJsonStr = await toString(stream)
               const pkgJsonObj = JSON.parse(pkgJsonStr)
 
-              pkgJsonObj.publishConfig = pkgJsonObj.publishConfig || {}
-              pkgJsonObj.publishConfig.registry = to
+              // artifactory cannot handle publishConfig.registry, so delete it instead of update
+              // pkgJsonObj.publishConfig = pkgJsonObj.publishConfig || {}
+              // pkgJsonObj.publishConfig.registry = to
+
+              delete pkgJsonObj.publishConfig.registry
+              if (Object.keys(pkgJsonObj.publishConfig).length === 0) {
+                delete pkgJsonObj.publishConfig
+              }
 
               const newPkgJsonStr = JSON.stringify(pkgJsonObj, null, 2)
               pack.entry({ name: 'package/package.json' }, newPkgJsonStr, callback)
