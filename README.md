@@ -2,7 +2,7 @@
 
 Migrate all versions of given npm package to another registry.
 
-## Install 
+## Install
 
 ```bash
 npm i npm-migrate-all
@@ -49,7 +49,7 @@ META_RATE_LIMIT=10 PACKAGE_RATE_LIMIT=5 VERSION_RATE_LIMIT=10 npx npm-migrate-al
 # 1. fetch metadata
 npm show pkg # get package metadata and tarball url.
 
-# 2. download tarball with axios.
+# 2. download tarball via `npm pack`.
 # 3. update package.json if needed.
 # 4. save tarball to hard disk
 
