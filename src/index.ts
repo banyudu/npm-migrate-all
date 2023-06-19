@@ -8,7 +8,7 @@ import gunzip from 'gunzip-maybe'
 import toString from 'stream-to-string'
 import streamToPromise from 'stream-to-promise'
 import zlib from 'zlib'
-import fs from 'fs'
+// import fs from 'fs'
 // import * as _ from 'lodash'
 
 interface PackageSummary {
@@ -151,6 +151,7 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
     version: string,
     registry: string
   ) => {
+    // eslint-disable-next-line max-len
     const { stdout } = await $`npm pack ${getRegistryParam(pkgName, registry)} --pack-destination=${tempDir} ${pkgName}@${version}`
     return fs.readFileSync(path.join(tempDir, stdout.trim()))
   }
@@ -208,7 +209,7 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
       try {
         const metadata = await inspect(pkg.name, version, from)
         const tarballUrl = metadata.dist.tarball
-        const tarballData = downloadTarball(pkg.name, version, from)
+        const tarballData = await downloadTarball(pkg.name, version, from)
         const basename = path.basename(tarballUrl)
         const pkgDir = path.join(tempDir, pkg.name)
         const destFilename = path.join(pkgDir, basename)
