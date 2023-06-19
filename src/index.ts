@@ -1,4 +1,3 @@
-import axios from 'axios'
 import 'zx/globals'
 import pLimit from 'p-limit'
 import MultiProgress from 'multi-progress'
@@ -9,6 +8,7 @@ import gunzip from 'gunzip-maybe'
 import toString from 'stream-to-string'
 import streamToPromise from 'stream-to-promise'
 import zlib from 'zlib'
+import fs from 'fs'
 // import * as _ from 'lodash'
 
 interface PackageSummary {
@@ -146,6 +146,15 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
   )
   publishBar.tick(0)
 
+  const downloadTarball = async (
+    pkgName: string,
+    version: string,
+    registry: string
+  ) => {
+    const { stdout } = await $`npm pack ${getRegistryParam(pkgName, registry)} --pack-destination=${tempDir} ${pkgName}@${version}`
+    return fs.readFileSync(path.join(tempDir, stdout.trim()))
+  }
+
   const updateAndSync = async (tarballData: any, destFilename: string) => {
     const pack = tar.pack()
     const extract = tar.extract()
@@ -199,12 +208,7 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
       try {
         const metadata = await inspect(pkg.name, version, from)
         const tarballUrl = metadata.dist.tarball
-        const tarballData = (await axios.get(
-          tarballUrl,
-          {
-            responseType: 'arraybuffer'
-          }
-        )).data
+        const tarballData = downloadTarball(pkg.name, version, from)
         const basename = path.basename(tarballUrl)
         const pkgDir = path.join(tempDir, pkg.name)
         const destFilename = path.join(pkgDir, basename)
