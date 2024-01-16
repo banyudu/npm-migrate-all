@@ -8,8 +8,6 @@ import gunzip from 'gunzip-maybe'
 import toString from 'stream-to-string'
 import streamToPromise from 'stream-to-promise'
 import zlib from 'zlib'
-// import fs from 'fs'
-// import * as _ from 'lodash'
 
 interface PackageSummary {
   name: string
@@ -31,9 +29,6 @@ const getProgressBarOptions = (total: number): ProgressBarOptions => ({
 const metaLimit = pLimit(Number(process.env.META_RATE_LIMIT) || 10)
 const pkgLimit = pLimit(Number(process.env.PACKAGE_RATE_LIMIT) || 5)
 const versionLimit = pLimit(Number(process.env.VERSION_RATE_LIMIT) || 10)
-
-// operations that requires `cd` change current directory
-// const cdLimit = pLimit(1)
 
 const getRegistryParam = (pkgName: string, registry: string) => {
   const scope = pkgName.startsWith('@') ? pkgName.split('/')[0] : null
@@ -58,6 +53,15 @@ interface MigrateResult {
   skipped: string[]
 }
 
+const getScopes = (pkgs: string[]): string[] => {
+  const scopes = pkgs.map(e => e?.trim?.()).filter(Boolean).map(pkg => {
+    if (!pkg.startsWith('@')) return null
+    const scope = pkg.split('/')[0]
+    return scope
+  })
+  return Array.from(new Set(scopes)).filter(Boolean) as string[]
+}
+
 /**
  * batch migrate npm packages
  * @param from source registry url. Example: https://registry.npmjs.org/
@@ -69,6 +73,13 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
   pkgs = pkgs.map(e => e?.trim?.()).filter(Boolean)
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'npm-migrate-all-'))
   await $`cd ${tempDir}`
+
+  // geneate .npmrc file for scoped packages
+  const scopes = getScopes(pkgs)
+  const npmrcContent = scopes.map(scope => {
+    return `${scope}:registry=${to}`
+  }).join('\n')
+  fs.writeFileSync(path.join(tempDir, '.npmrc'), npmrcContent)
 
   const succeeded: string[] = []
   const failed: string[] = []
@@ -217,7 +228,9 @@ const npmMigrateAll = async (from: string, to: string, pkgs: string[]): Promise<
         // if publishConfig.registry exists in package.json, then it must be euqal to the target registry
         // const needUpdate = metadata.publishConfig?.registry && metadata.publishConfig.registry !== to
         const needUpdate = metadata.publishConfig?.registry &&
-          metadata.publishConfig?.registry !== to
+          metadata.publishConfig?.registry !== to &&
+          // scoped package respects .npmrc when publicshing while unscoped package ignores it
+          !pkg.name.startsWith('@')
 
         if (needUpdate) {
           await updateAndSync(tarballData, destFilename)
