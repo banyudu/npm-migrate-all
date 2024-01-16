@@ -59,8 +59,7 @@ npm publish <path-to-tarball>
 
 ## Known issues
 
-`npm-migrate-all` will try its best to migrate the package as it is, means that packages' dist-tag and shasum will keep
-unchanged in most cases. However, this is impossible when package's `package.json` file contains `publishConfig.registry` field.
+`npm-migrate-all`` will make every effort to migrate the package as is, meaning that the package's dist-tag and shasum will remain unchanged in most cases. However, this becomes impossible when an unscoped package's package.json file contains the publishConfig.registry field.
 
 ```json
 {
@@ -70,8 +69,6 @@ unchanged in most cases. However, this is impossible when package's `package.jso
 }
 ```
 
-Npm doesn't allow command line parameters to override publishConfig in `package.json`, so there's no way to publish given package
-without change its `package.json` file.
+Npm does not permit command line parameters to override publishConfig in package.json, and .npmrc can only update the registry for scoped packages. Therefore, there is no way to publish an unscoped package without modifying its `package.json` file.
 
-To fix this issue, `npm-migrate-all` open the tgz file in memory and update the content of `package.json` file. After this operation,
-the tgz file's shasum will be changed.
+To resolve this issue, `npm-migrate-all` opens the tgz file in memory and updates the content of the package.json file. As a result of this operation, the tgz file's shasum will be altered.
